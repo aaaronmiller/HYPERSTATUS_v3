@@ -176,10 +176,14 @@ backup_pi() {
     log_success "Backed up pi/config.toml"
   fi
   
-  # Backup existing extensions
-  if [ -d "${pi_dir}/extensions" ]; then
-    cp -r "${pi_dir}/extensions" "${BACKUP_DIR}/pi/extensions"
-    log_success "Backed up pi/extensions/"
+  # Backup existing extensions (both old and new locations)
+  if [ -d "${pi_dir}/extensions/hyperstatus" ]; then
+    cp -r "${pi_dir}/extensions/hyperstatus" "${BACKUP_DIR}/pi/extensions/"
+    log_success "Backed up pi/extensions/hyperstatus/"
+  fi
+  if [ -d "${pi_dir}/agent/extensions/hyperstatus" ]; then
+    cp -r "${pi_dir}/agent/extensions/hyperstatus" "${BACKUP_DIR}/pi/agent/extensions/"
+    log_success "Backed up pi/agent/extensions/hyperstatus/"
   fi
 }
 
@@ -276,8 +280,8 @@ install_hermes() {
 install_pi() {
   log "${BOLD}Installing HyperStatus for Pi Agent...${RESET}"
   
-  local pi_dir="${HOME_DIR}/.pi"
-  local ext_dir="${pi_dir}/extensions/hyperstatus"
+  # Pi loads extensions from ~/.pi/agent/extensions/
+  local ext_dir="${HOME_DIR}/.pi/agent/extensions/hyperstatus"
   mkdir -p "$ext_dir"
   
   # Copy extension files
@@ -288,8 +292,8 @@ install_pi() {
   cat > "${ext_dir}/package.json" << 'PKGJSON'
 {
   "name": "hyperstatus",
-  "version": "2.0.0",
-  "description": "Powerline-style status bar with full metric coverage",
+  "version": "3.0.0",
+  "description": "Powerline-style status bar with full metric coverage + quota",
   "main": "index.ts",
   "piExtension": true,
   "permissions": ["statusbar", "filesystem", "network"]
@@ -354,7 +358,11 @@ restore_pi() {
   fi
   
   if [ -d "${backup_path}/pi" ]; then
-    cp -r "${backup_path}/pi/"* "${HOME_DIR}/.pi/"
+    cp -r "${backup_path}/pi/"* "${HOME_DIR}/.pi/" 2>/dev/null || true
+    if [ -d "${backup_path}/pi/agent/extensions/hyperstatus" ]; then
+      mkdir -p "${HOME_DIR}/.pi/agent/extensions"
+      cp -r "${backup_path}/pi/agent/extensions/hyperstatus" "${HOME_DIR}/.pi/agent/extensions/"
+    fi
     log_success "Restored Pi Agent from backup"
   else
     log_error "No Pi Agent backup found at ${backup_path}"
