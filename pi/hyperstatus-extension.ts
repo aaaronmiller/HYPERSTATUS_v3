@@ -65,7 +65,8 @@ const S = "\ue0b0"; // powerline separator
 
 const I = { model:"\ue716", ctx:"\uf6cf", tok:"\uf1c9", cost:"\uf155", dur:"\uf017",
             comp:"\uf410", git:"\uf418", dir:"\uf07b", eff:"\uf58c", perm:"\uf132",
-            quot:"\uf0ec", proxy:"\uf6ff", cache:"\uf021", bg:"\uf44e" };
+            quot:"\uf0ec", proxy:"\uf6ff", cache:"\uf021", bg:"\uf44e",
+            voice:"\uf130", yolo:"\uf714", turn:"\uf252" };
 
 function ctxClr(p: number) { return p>=95?C.red : p>=80?C.pch : p>=50?C.yel : C.grn; }
 function bar(p: number, w=10) { const f=Math.round(p/100*w); return "█".repeat(f)+"░".repeat(w-f); }
@@ -139,6 +140,8 @@ export default function (pi: ExtensionAPI) {
   function renderPrimaryLine(w: number, ctx: ExtensionContext): string {
     const model = (ctx as any).model ?? {};
     const mShort = (model.displayName??model.id??"?").replace(/claude-/g,"c").replace(/-202\d.*/,"");
+    const isVoiceModel = /deepseek|gemini|voice/i.test(mShort) || /deepseek|gemini|voice/i.test(model.id??"");
+    const voiceIcon = isVoiceModel ? `${I.voice} ` : "";
     const {input, output, cost} = metrics(ctx);
     const tot = input + output;
     const cu = ctx.getContextUsage?.();
@@ -158,9 +161,9 @@ export default function (pi: ExtensionAPI) {
       const aShort = proxyInfo.actual_model.replace(/claude-/g,"c").replace(/-202\d.*/,"").replace(/gpt-4o/g,"gpt4o").replace(/o4-mini/g,"o4m");
       l += fg(C.lav)+bg(C.s1)+` ${I.model} ${mShort} `+R;
       l += fg(C.s1)+bg(C.proxy)+S+R;
-      l += fg(C.text)+bg(C.proxy)+`${I.proxy}→${aShort} `+R;
+      l += fg(C.text)+bg(C.proxy)+`${voiceIcon}${I.proxy}→${aShort} `+R;
     } else {
-      l += fg(C.lav)+bg(C.s1)+` ${I.model} ${mShort} `+R;
+      l += fg(C.lav)+bg(C.s1)+` ${voiceIcon}${I.model} ${mShort} `+R;
     }
 
     let proj = "~";
@@ -185,13 +188,20 @@ export default function (pi: ExtensionAPI) {
     try { const s = (ctx as any).sessionManager; if (s?.getSessionStats) durMs = s.getSessionStats()?.duration??0; } catch { /* */ }
     r += fg(C.text)+bg(C.s1)+` ${I.dur}${dur(durMs)} `+R;
 
+    // Turn duration (read from env, show if available)
+    const turnDur = parseInt(process.env.HERMES_TURN_DURATION_MS ?? "0", 10);
+    if (turnDur > 0) {
+      r += fg(C.s1)+bg(C.s0)+S+R;
+      r += fg(C.sap)+bg(C.s0)+` ${I.turn}${dur(turnDur)} `+R;
+    }
+
     if (eff) {
       r += fg(C.s1)+bg(C.s0)+S+R;
       r += fg(C.mauv)+bg(C.s0)+` ${I.eff}${eIcon} `+R;
     }
 
     const perm = permLabel();
-    if (perm === "Y") r += fg(C.bg)+bg(C.red)+` ${I.perm}${perm} `+R;
+    if (perm === "Y") r += fg(C.bg)+bg(C.red)+` ${I.yolo}${perm} `+R;
     else if (perm === "A") r += fg(C.bg)+bg(C.yel)+` ${I.perm}${perm} `+R;
 
     // Join

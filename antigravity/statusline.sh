@@ -12,21 +12,22 @@ set -euo pipefail
 
 INPUT=$(cat)
 
-# --- Color Palette (Catppuccin Mocha) ---
-C_BG='\033[48;5;30m'        # Deep teal
-C_BG2='\033[48;5;24m'       # Darker teal
-C_BG3='\033[48;5;60m'       # Purple accent
-C_BG_WARN='\033[48;5;130m'  # Orange
-C_BG_CRIT='\033[48;5;160m'  # Red
-C_BG_OK='\033[48;5;70m'     # Green
-C_BG_QUOTA='\033[48;5;97m'  # Mauve
-C_BG_PROXY='\033[48;5;54m'  # Purple
-C_FG='\033[38;5;230m'       # Light text
-C_FG_DIM='\033[38;5;180m'   # Dimmed
-C_FG_BRIGHT='\033[38;5;255m'
-C_FG_GREEN='\033[38;5;150m'
-C_FG_YELLOW='\033[38;5;220m'
-C_FG_RED='\033[38;5;210m'
+# --- Color Palette (Antigravity / Google Blue theme) ---
+# Matches Google's branding: dark navy bg, Google Blue #1A73E8 accent
+C_BG='\033[48;5;233m'        # Near black
+C_BG2='\033[48;5;236m'       # Dark grey
+C_BG3='\033[48;5;26m'        # Google Blue (#1A73E8)
+C_BG_WARN='\033[48;5;208m'   # Orange
+C_BG_CRIT='\033[48;5;196m'   # Red
+C_BG_OK='\033[48;5;34m'      # Google Green (#34A853)
+C_BG_QUOTA='\033[48;5;23m'   # Teal
+C_BG_PROXY='\033[48;5;54m'   # Purple
+C_FG='\033[38;5;255m'        # White text
+C_FG_DIM='\033[38;5;250m'    # Light grey dimmed
+C_FG_BRIGHT='\033[38;5;255m' # Bright white
+C_FG_GREEN='\033[38;5;42m'   # Google Green
+C_FG_YELLOW='\033[38;5;220m' # Google Yellow (#FBBC04)
+C_FG_RED='\033[38;5;196m'    # Google Red (#EA4335)
 C_RESET='\033[0m'
 
 PL_RIGHT='\ue0b0'
@@ -44,6 +45,10 @@ IC_PERM='\uf132'
 IC_LATENCY='\uf9ee'
 IC_SANDBOX='\uf132'
 IC_WARN='\uf071'
+# Agent-specific icons
+IC_VOICE='\uf130'       # Microphone — voice/Gemini voice input
+IC_YOLO='\uf714'        # Skull — YOLO danger mode
+IC_TURN='\uf252'        # Turn duration
 
 # --- JSON value extraction ---
 jval() {
@@ -165,6 +170,28 @@ fi
 SHORT_MODEL=$(echo "$MODEL" | sed 's/gemini/gm/' | sed 's/claude-/c/' | sed 's/gpt-/g/' | sed 's/-202.*//' | sed 's/-latest//' | sed 's/ [0-9]*[KMB].*//')
 if [ -z "$SHORT_MODEL" ]; then SHORT_MODEL="unknown"; fi
 
+# Voice icon for DeepSeek/Gemini voice-capable models
+SEG_VOICE=""
+case "$MODEL" in
+  *deepseek*|*gemini*|*voice*) SEG_VOICE="${IC_VOICE} " ;;
+esac
+
+# Turn duration (per-turn timing)
+TURN_DURATION_MS="${HERMES_TURN_DURATION_MS:-0}"
+SEG_TURN=""
+if [ "$TURN_DURATION_MS" -gt 0 ]; then
+  TURN_FMT=$(fmt_duration "$TURN_DURATION_MS")
+  SEG_TURN=" ${IC_TURN}${TURN_FMT}"
+fi
+
+# YOLO usage counter
+YOLO_COUNT=$(cat /tmp/hyperstatus-yolo-count 2>/dev/null || echo "0")
+PERM_LEVEL="${HERMES_YOLO_MODE:-0}"
+SEG_YOLO=""
+if [ "$PERM_LEVEL" = "1" ] && [ "$YOLO_COUNT" -gt 0 ]; then
+  SEG_YOLO=" ${IC_YOLO}${YOLO_COUNT}"
+fi
+
 # Agent state icon
 STATE_ICON=""
 case "$AGENT_STATE" in
@@ -255,8 +282,8 @@ fi
 # ==============================================================================
 if [ "$USE_TWO_LINES" = true ]; then
   # Line 1: model │ project │ git │ context │ tokens │ state │ plan
-  LEFT_PART="${SEG_MODEL} │ ${SEG_PROJECT}${GIT_DISPLAY}"
-  L1_RIGHT="${SEG_CTX} │ ${SEG_TOKENS}${STATE_ICON}${PLAN_DISPLAY}"
+  LEFT_PART="${SEG_VOICE}${SEG_MODEL} │ ${SEG_PROJECT}${GIT_DISPLAY}"
+  L1_RIGHT="${SEG_CTX} │ ${SEG_TOKENS}${SEG_TURN}${STATE_ICON}${PLAN_DISPLAY}${SEG_YOLO}"
 
   echo -e "${C_BG}${C_FG_BRIGHT} ${LEFT_PART} ${C_FG_DIM}${PL_RIGHT_THIN}${C_BG2}${C_FG} ${L1_RIGHT} ${C_RESET}"
 
@@ -274,7 +301,7 @@ if [ "$USE_TWO_LINES" = true ]; then
   fi
 else
   # 1-line mode
-  LEFT_PART="${SEG_MODEL} │ ${SEG_PROJECT}${GIT_DISPLAY}"
-  RIGHT_PART="${SEG_CTX} │ ${SEG_TOKENS}${STATE_ICON}"
+  LEFT_PART="${SEG_VOICE}${SEG_MODEL} │ ${SEG_PROJECT}${GIT_DISPLAY}"
+  RIGHT_PART="${SEG_CTX} │ ${SEG_TOKENS}${SEG_TURN}${STATE_ICON}${SEG_YOLO}"
   echo -e "${C_BG}${C_FG_BRIGHT} ${LEFT_PART} ${C_FG_DIM}${PL_RIGHT_THIN}${C_BG2}${C_FG} ${RIGHT_PART} ${C_RESET}"
 fi

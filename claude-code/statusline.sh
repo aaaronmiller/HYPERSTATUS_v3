@@ -14,24 +14,25 @@ set -euo pipefail
 # --- Read JSON input from stdin ---
 INPUT=$(cat)
 
-# --- Color Palette (Catppuccin Mocha-inspired + status semantics) ---
-C_BG='\033[48;5;30m'        # Deep teal background
-C_BG2='\033[48;5;24m'       # Darker teal for secondary segments
-C_BG3='\033[48;5;60m'       # Purple accent segment
+# --- Color Palette (Claude Code Default — deep navy/purple TUI theme) ---
+# Matches Claude Code's native TUI: dark purple bg, lavender/white text
+C_BG='\033[48;5;53m'        # Deep royal purple (#2D1B69)
+C_BG2='\033[48;5;55m'       # Purple (#3D2B79)
+C_BG3='\033[48;5;92m'       # Violet accent (#6C47B4)
 C_BG_WARN='\033[48;5;130m'  # Orange warning
 C_BG_CRIT='\033[48;5;160m'  # Red critical
 C_BG_OK='\033[48;5;70m'     # Green healthy
-C_BG_QUOTA='\033[48;5;97m'  # Mauve/dim purple for quota segments
-C_BG_PROXY='\033[48;5;54m'  # Purple for proxy-specific segments
-C_FG='\033[38;5;230m'       # Light text on dark bg
-C_FG_DIM='\033[38;5;180m'   # Dimmed text
-C_FG_BRIGHT='\033[38;5;255m' # Bright white
+C_BG_QUOTA='\033[48;5;97m'  # Mauve for quota segments
+C_BG_PROXY='\033[48;5;54m'  # Purple for proxy segments
+C_FG='\033[38;5;255m'       # White text
+C_FG_DIM='\033[38;5;182m'   # Lavender dimmed
+C_FG_BRIGHT='\033[38;5;183m' # Bright lavender
 C_FG_GREEN='\033[38;5;150m'
 C_FG_YELLOW='\033[38;5;220m'
 C_FG_SAPPHIRE='\033[38;5;116m'
-C_FG_RED='\033[38;5;210m'
 C_FG_LAVENDER='\033[38;5;183m'
 C_FG_PEACH='\033[38;5;215m'
+C_FG_RED='\033[38;5;210m'
 C_FG_DARK='\033[38;5;59m'   # Muted for secondary line prefixes
 C_RESET='\033[0m'
 
@@ -69,6 +70,9 @@ IC_QUOTA='\uf0ec'       #  Quota/gauge icon
 IC_PROXY='\uf6ff'       # 
 IC_PROVIDER='\uf1c0'    # 
 IC_WARN='\uf071'        # 
+IC_VOICE='\uf130'       # Microphone — voice/DeepSeek input active
+IC_YOLO='\uf714'        # Skull — YOLO danger mode indicator
+IC_TURN='\uf252'        # Turn duration counter
 
 # --- Helper: JSON value extraction ---
 jval() {
@@ -395,6 +399,21 @@ SEG_COST="${IC_COST} ${COST_FMT}"
 DUR_FMT=$(fmt_duration "${DURATION_MS:-0}")
 SEG_DURATION="${IC_TIME} ${DUR_FMT}"
 
+# Turn duration (per-turn timing)
+TURN_DURATION_MS="${HERMES_TURN_DURATION_MS:-${CLAUDE_TURN_DURATION_MS:-0}}"
+SEG_TURN=""
+if [ "$TURN_DURATION_MS" -gt 0 ]; then
+  TURN_FMT=$(fmt_duration "$TURN_DURATION_MS")
+  SEG_TURN=" ${IC_TURN}${TURN_FMT}"
+fi
+
+# YOLO usage counter
+YOLO_COUNT=$(cat /tmp/hyperstatus-yolo-count 2>/dev/null || echo "0")
+SEG_YOLO_COUNT=""
+if [ "$PERM_LEVEL" = "yolo" ] && [ "$YOLO_COUNT" -gt 0 ]; then
+  SEG_YOLO_COUNT=" ${IC_YOLO}${YOLO_COUNT}"
+fi
+
 # Effort icon
 SEG_EFFORT=""
 if [ -n "$EFFORT" ]; then
@@ -415,7 +434,7 @@ fi
 # Permission
 SEG_PERM=""
 case "$PERM_LEVEL" in
-  yolo) SEG_PERM=" ${IC_PERM}Y" ;;
+  yolo) SEG_PERM=" ${IC_YOLO}Y" ;;
   auto) SEG_PERM=" ${IC_PERM}A" ;;
 esac
 
@@ -505,7 +524,7 @@ if [ "$USE_TWO_LINES" = true ]; then
   LEFT_PART="${SEG_MODEL}${SEG_PROXY} │ ${SEG_PROJECT}${SEG_GIT}${SEG_WORKTREE}${SEG_PR}${SEG_LINES}"
 
   # Primary line (right side)
-  L1_RIGHT="${SEG_CTX} │ ${SEG_TOKENS} │ ${SEG_COST} │ ${SEG_DURATION}${SEG_EFFORT}${SEG_THINK}${SEG_PERM}"
+  L1_RIGHT="${SEG_CTX} │ ${SEG_TOKENS} │ ${SEG_COST} │ ${SEG_DURATION}${SEG_TURN}${SEG_EFFORT}${SEG_THINK}${SEG_PERM}${SEG_YOLO_COUNT}"
 
   # Secondary line (full, centered on dim bg)
   L2_ITEMS=""
@@ -560,7 +579,7 @@ else
   LEFT_PART="${SEG_MODEL}${SEG_PROXY} │ ${SEG_PROJECT}${SEG_GIT}${SEG_WORKTREE}${SEG_LINES}"
 
   # Right side: context, tokens, cost, duration + anything that fits
-  RIGHT_PART="${SEG_CTX} │ ${SEG_TOKENS} │ ${SEG_COST}${SEG_EFFORT}${SEG_DURATION}${SEG_PERM}${SEG_THINK}"
+  RIGHT_PART="${SEG_CTX} │ ${SEG_TOKENS} │ ${SEG_COST}${SEG_EFFORT}${SEG_DURATION}${SEG_TURN}${SEG_PERM}${SEG_YOLO_COUNT}${SEG_THINK}"
 
   echo -e "${C_BG}${C_FG_BRIGHT} ${LEFT_PART} ${C_FG_DIM}${PL_RIGHT_THIN}${C_BG2}${C_FG} ${RIGHT_PART} ${C_RESET}"
 fi

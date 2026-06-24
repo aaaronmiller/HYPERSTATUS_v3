@@ -17,24 +17,25 @@
 
 set -euo pipefail
 
-# --- Color Palette (Catppuccin Mocha — identical to Claude Code version) ---
-C_BG='\033[48;5;30m'        # Deep teal
-C_BG2='\033[48;5;24m'       # Darker teal
-C_BG3='\033[48;5;60m'       # Purple accent
-C_BG_WARN='\033[48;5;130m'  # Orange warning
-C_BG_CRIT='\033[48;5;160m'  # Red critical
-C_BG_OK='\033[48;5;70m'     # Green healthy
-C_BG_QUOTA='\033[48;5;97m'  # Mauve for quota segments
-C_BG_PROXY='\033[48;5;54m'  # Purple for proxy segments
-C_FG='\033[38;5;230m'       # Light text
-C_FG_DIM='\033[38;5;180m'   # Dimmed text
-C_FG_BRIGHT='\033[38;5;255m' # Bright white
-C_FG_GREEN='\033[38;5;150m'
+# --- Color Palette (Hermes Default Skin — warm gold/desert on dark navy) ---
+# Matches Hermes Agent skin_engine default: #1a1a2e bg, #FFD700 gold strong, #FF8C00 orange warn
+C_BG='\033[48;5;233m'        # Dark navy (#1a1a2e)
+C_BG2='\033[48;5;236m'       # Lighter navy (#2a2a4e)
+C_BG3='\033[48;5;94m'        # Bronze/gold accent (#875f00)
+C_BG_WARN='\033[48;5;208m'   # Dark orange warn (#FF8C00)
+C_BG_CRIT='\033[48;5;203m'   # Coral critical (#FF6B6B)
+C_BG_OK='\033[48;5;108m'     # Sage green good (#8FBC8F)
+C_BG_QUOTA='\033[48;5;97m'   # Mauve for quota segments
+C_BG_PROXY='\033[48;5;54m'   # Purple for proxy segments
+C_FG='\033[38;5;230m'        # Corksilk warm text (#FFF8DC)
+C_FG_DIM='\033[38;5;180m'    # Desert/Peru dim gold (#CD853F)
+C_FG_BRIGHT='\033[38;5;220m' # Gold bright (#FFD700) — Hermes signature
+C_FG_GREEN='\033[38;5;108m'
 C_FG_YELLOW='\033[38;5;220m'
 C_FG_SAPPHIRE='\033[38;5;116m'
 C_FG_LAVENDER='\033[38;5;183m'
 C_FG_PEACH='\033[38;5;215m'
-C_FG_RED='\033[38;5;210m'
+C_FG_RED='\033[38;5;203m'
 C_RESET='\033[0m'
 
 # Powerline separators
@@ -65,6 +66,9 @@ IC_QUOTA='\uf0ec'
 IC_PROXY='\uf6ff'
 IC_PROVIDER='\uf1c0'
 IC_WARN='\uf071'
+IC_VOICE='\uf130'     # Microphone — voice input active (used in DeepSeek)
+IC_YOLO='\uf714'      # Skull — YOLO danger mode indicator
+IC_TURN='\uf252'      # Turn duration counter
 
 # --- Helpers ---
 ctx_color() {
@@ -188,6 +192,9 @@ else
   DURATION_MS="${HERMES_DURATION_MS:-0}"
 fi
 
+# Turn duration (per-turn timing, if available)
+TURN_DURATION_MS="${HERMES_TURN_DURATION_MS:-0}"
+
 # API duration for throughput
 API_DURATION_MS="${HERMES_API_DURATION_MS:-0}"
 if [ "$API_DURATION_MS" -gt 0 ] && [ "$OUTPUT_TOKENS" -gt 0 ]; then
@@ -230,14 +237,15 @@ LINES_REM="${HERMES_LINES_REMOVED:-0}"
 RTK_SAVED="${RTK_TOKENS_SAVED:-}"
 HEADROOM_SAVED="${HEADROOM_TOKENS_SAVED:-}"
 if [ -n "$RTK_SAVED" ] && [ "$RTK_SAVED" != "0" ]; then
-  COMP_DISPLAY=" ${IC_COMPRESS} ▼$(fmt_tokens "$RTK_SAVED")"
+  COMP_DISPLAY=" ${IC_COMPRESS}▼$(fmt_tokens "$RTK_SAVED")"
 elif [ -n "$HEADROOM_SAVED" ] && [ "$HEADROOM_SAVED" != "0" ]; then
-  COMP_DISPLAY=" ${IC_COMPRESS} ▼$(fmt_tokens "$HEADROOM_SAVED")"
+  COMP_DISPLAY=" ${IC_COMPRESS}▼$(fmt_tokens "$HEADROOM_SAVED")"
 else
   COMP_DISPLAY=""
 fi
 
 COMPRESS_COUNT="${HERMES_COMPRESS_COUNT:-0}"
+# Compaction counter — number of context compactions this session
 
 # Background tasks
 BG_TASKS="${HERMES_BG_TASKS:-0}"
@@ -406,6 +414,20 @@ fi
 DUR_FMT=$(fmt_duration "${DURATION_MS:-0}")
 SEG_DURATION="${IC_TIME} ${DUR_FMT}"
 
+# Turn duration segment
+SEG_TURN=""
+if [ "$TURN_DURATION_MS" -gt 0 ]; then
+  TURN_FMT=$(fmt_duration "$TURN_DURATION_MS")
+  SEG_TURN=" ${IC_TURN}${TURN_FMT}"
+fi
+
+# YOLO usage counter — track how many YOLO commands used this session
+YOLO_COUNT=$(cat /tmp/hyperstatus-yolo-count 2>/dev/null || echo "0")
+SEG_YOLO_COUNT=""
+if [ "$PERM_LEVEL" = "yolo" ] && [ "$YOLO_COUNT" -gt 0 ]; then
+  SEG_YOLO_COUNT=" ${IC_YOLO}${YOLO_COUNT}"
+fi
+
 SEG_EFFORT=""
 if [ -n "$EFFORT" ]; then
   case "$EFFORT" in
@@ -423,7 +445,7 @@ fi
 
 SEG_PERM=""
 case "$PERM_LEVEL" in
-  yolo) SEG_PERM=" ${IC_PERM}Y" ;;
+  yolo) SEG_PERM=" ${IC_YOLO}Y" ;;
   auto) SEG_PERM=" ${IC_PERM}A" ;;
 esac
 
@@ -443,9 +465,9 @@ fi
 if [ "$COLS" -ge 80 ]; then
   # ====== 2-LINE MODE (wide terminal) ======
 
-  # Line 1 (Primary — teal bg): model | project | git | context% | tokens | cost | duration | effort | perm
+  # Line 1 (Primary — warm gold/desert bg): model | project | git | context% | tokens | cost | duration | effort | perm | turn
   L1_LEFT="${SEG_MODEL}${SEG_LINES} │ ${SEG_PROJECT}${SEG_GIT}"
-  L1_RIGHT="${SEG_CTX} │ ${SEG_TOKENS} │ ${SEG_COST} │ ${SEG_DURATION}${SEG_EFFORT}${SEG_THINK}${SEG_PERM}"
+  L1_RIGHT="${SEG_CTX} │ ${SEG_TOKENS} │ ${SEG_COST} │ ${SEG_DURATION}${SEG_TURN}${SEG_EFFORT}${SEG_THINK}${SEG_PERM}${SEG_YOLO_COUNT}"
 
   echo -e "${C_BG}${C_FG_BRIGHT} ${L1_LEFT} ${C_FG_DIM}${PL_RIGHT_THIN}${C_BG2}${C_FG} ${L1_RIGHT} ${C_RESET}"
 
@@ -463,6 +485,6 @@ if [ "$COLS" -ge 80 ]; then
 else
   # ====== NARROW MODE (<80 cols) ======
   NARROW_LEFT="${IC_MODEL} ${SHORT_MODEL}${SEG_PROXY} │ ${IC_DIR} ${PROJECT_DISPLAY}${SEG_GIT}"
-  NARROW_RIGHT="${IC_CTX} ${CTX_PCT_FMT}%%${SEG_SPEED} │ ${IC_COST} ${COST_FMT} │ ${IC_TIME} ${DUR_FMT}"
+  NARROW_RIGHT="${IC_CTX} ${CTX_PCT_FMT}%%${SEG_SPEED} │ ${IC_COST} ${COST_FMT} │ ${IC_TIME} ${DUR_FMT}${SEG_PERM}${SEG_YOLO_COUNT}"
   echo -e "${C_BG}${C_FG_BRIGHT} ${NARROW_LEFT} ${C_FG_DIM}${PL_RIGHT_THIN}${C_BG2}${C_FG} ${NARROW_RIGHT} ${C_RESET}"
 fi
