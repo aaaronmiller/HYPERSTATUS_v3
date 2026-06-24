@@ -176,7 +176,8 @@ export default function (pi: ExtensionAPI) {
       r += fg(C.bg)+bg(ctxClr(pct))+` ${I.ctx}${bar(pct)} ${pct.toFixed(1)}% `+R;
       r += fg(ctxClr(pct))+bg(C.s1)+S+R;
     }
-    r += fg(C.text)+bg(C.s1)+` ${I.tok}${t(tot)} `+R;
+    const rem = Math.max(0, win - tot);
+    r += fg(C.text)+bg(C.s1)+` ${I.tok}${t(tot)} (${t(rem)} rem) `+R;
     r += fg(C.s1)+bg(C.s0)+S+R;
 
     if (cost > 0) {

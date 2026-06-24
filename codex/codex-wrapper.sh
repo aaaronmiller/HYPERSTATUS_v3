@@ -231,7 +231,9 @@ render_status() {
   LINE1+="${COMP_DISPLAY}"
 
   # LINE 2 (bottom): context bar │ tokens (left) │ cache │ cost │ t/s │ rate limits │ budget │ duration │ perm (right)
-  LINE2="#[align=left]#[fg=#1e1e2e,bg=${CTX_COLOR}] ${BAR} ${CTX_PCT}% #[fg=#cdd6f4,bg=#45475a] $(fmt_t $TOTAL_TOKENS)"
+  REM_TOKENS=$((CTX_SIZE - TOTAL_TOKENS))
+  if [ "$REM_TOKENS" -lt 0 ]; then REM_TOKENS=0; fi
+  LINE2="#[align=left]#[fg=#1e1e2e,bg=${CTX_COLOR}] ${BAR} ${CTX_PCT}% #[fg=#cdd6f4,bg=#45475a] $(fmt_t $TOTAL_TOKENS) ($(fmt_t $REM_TOKENS) rem)"
   LINE2+="#[align=right]#[fg=#7dd3fc,bg=#313244] ⠿ ${CACHE_PCT}% #[fg=#eab308,bg=#313244] \$$(printf '%.2f' ${TOTAL_COST})"
   if [ "$TOK_PER_S" != "0" ]; then
     LINE2+=" #[fg=#a6adc8]${TOK_PER_S}t/s"
