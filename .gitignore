@@ -59,3 +59,5 @@ generated_mockups/
 *.local.json
 *.local.yaml
 *.local.toml
+# Session memory (do not publish)
+.remember/

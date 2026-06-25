@@ -48,6 +48,7 @@ status_line = [
   "git-branch",
   "context-used",
   "context-remaining",
+  "context-window-size",
   "used-tokens",
   "total-output-tokens",
   "five-hour-limit",

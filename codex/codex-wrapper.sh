@@ -125,33 +125,9 @@ render_status() {
 
   # Permission
   PERM_DISPLAY=""
-  if [ "${CODEX_YOLO:-}" = "1" ]; then PERM_DISPLAY=" ☠Y"
+  if [ "${CODEX_YOLO:-}" = "1" ]; then PERM_DISPLAY=" Y"
   elif [ "${CODEX_AUTO_APPROVE:-}" = "1" ]; then PERM_DISPLAY=" A"
   fi
-
-  # Turn duration
-  TURN_DURATION_MS="${HERMES_TURN_DURATION_MS:-0}"
-  TURN_DISPLAY=""
-  if [ "$TURN_DURATION_MS" -gt 0 ]; then
-    if [ "$TURN_DURATION_MS" -ge 10000 ]; then
-      TURN_DISPLAY=" $(echo "scale=1; $TURN_DURATION_MS/1000" | bc)s"
-    else
-      TURN_DISPLAY=" ${TURN_DURATION_MS}ms"
-    fi
-  fi
-
-  # YOLO count
-  YOLO_COUNT=$(cat /tmp/hyperstatus-yolo-count 2>/dev/null || echo "0")
-  YOLO_DISPLAY=""
-  if [ "${CODEX_YOLO:-}" = "1" ] && [ "$YOLO_COUNT" -gt 0 ]; then
-    YOLO_DISPLAY=" ☠${YOLO_COUNT}"
-  fi
-
-  # Voice icon for DeepSeek
-  VOICE_ICON=""
-  case "$MODEL" in
-    *deepseek*|*voice*) VOICE_ICON=" " ;;
-  esac
 
   # ==============================================================================
   #  QUOTA DATA (v3.0)
@@ -223,67 +199,64 @@ render_status() {
     BUDGET_DISPLAY+=" O:\$$(printf '%.2f' "$OPENAI_BUDGET_REMAIN")"
   fi
 
-  # LINE 1 (top): model │ project │ branch │ git status │ compression
-  LINE1="#[fg=#84CC16,bg=#0d2818] 󰜖 ${SHORT_MODEL}${PROXY_INDICATOR} #[fg=#0d2818,bg=#1a3a2a]#[fg=#e0e0e0,bg=#1a3a2a]  ${PROJECT_DISPLAY}"
+  # LEFT: model | proxy | project | branch | git status | compression
+  LEFT="#[fg=#b4befe,bg=#1a6b5a] 󰜖 ${SHORT_MODEL}${PROXY_INDICATOR} #[fg=#1a6b5a,bg=#155044]#[fg=#cdd6f4,bg=#155044]  ${PROJECT_DISPLAY}"
   if [ -n "$GIT_BRANCH" ]; then
-    LINE1+=" #[fg=#a6e3a1]󰐘 ${GIT_BRANCH}${GIT_STATUS}"
+    LEFT+=" #[fg=#a6e3a1]󰐘 ${GIT_BRANCH}${GIT_STATUS}"
   fi
-  LINE1+="${COMP_DISPLAY}"
+  LEFT+="${COMP_DISPLAY}"
 
-  # LINE 2 (bottom): context bar │ tokens (left) │ cache │ cost │ t/s │ rate limits │ budget │ duration │ perm (right)
-  REM_TOKENS=$((CTX_SIZE - TOTAL_TOKENS))
-  if [ "$REM_TOKENS" -lt 0 ]; then REM_TOKENS=0; fi
-  LINE2="#[align=left]#[fg=#1e1e2e,bg=${CTX_COLOR}] ${BAR} ${CTX_PCT}% #[fg=#cdd6f4,bg=#45475a] $(fmt_t $TOTAL_TOKENS) ($(fmt_t $REM_TOKENS) rem)"
-  LINE2+="#[align=right]#[fg=#7dd3fc,bg=#313244] ⠿ ${CACHE_PCT}% #[fg=#eab308,bg=#313244] \$$(printf '%.2f' ${TOTAL_COST})"
+  # RIGHT: context% | tokens | cache | cost | t/s | quota/rate | budget | duration | perm
+  RIGHT="#[fg=#1e1e2e,bg=${CTX_COLOR}] ${BAR} ${CTX_PCT}% #[fg=#cdd6f4,bg=#45475a] $(fmt_t $TOTAL_TOKENS)/$(fmt_t $CTX_SIZE) #[fg=#74c7ec]⠿ ${CACHE_PCT}% #[fg=#f9e2af,bg=#313244] $$(printf '%.2f' ${TOTAL_COST})"
   if [ "$TOK_PER_S" != "0" ]; then
-    LINE2+=" #[fg=#a6adc8]${TOK_PER_S}t/s"
+    RIGHT+=" #[fg=#a6adc8]${TOK_PER_S}t/s"
   fi
 
   # Quota / Rate segments
   if [ "$PROXY_MODEL_SWAPPED" = "True" ] || [ "$PROXY_MODEL_SWAPPED" = "true" ]; then
     # Dual quota mode
     R5_CLR=$(rate_color "${RATE5:-0}")
-    LINE2+=" #[fg=#9370db,bg=#1e1e2e]󰜦 5h${RATE5}%/7d${RATE7}%|real"
+    RIGHT+=" #[fg=#9370db,bg=#1e1e2e]󰜦 5h${RATE5}%/7d${RATE7}%|real"
     if [ -n "$OPENAI_5H_PCT" ]; then
-      LINE2+=":5h${OPENAI_5H_PCT}%"
+      RIGHT+=":5h${OPENAI_5H_PCT}%"
     fi
     if [ -n "$OPENAI_7D_PCT" ]; then
-      LINE2+="/7d${OPENAI_7D_PCT}%"
+      RIGHT+="/7d${OPENAI_7D_PCT}%"
     fi
   else
     if [ "$RATE5" != "0" ]; then
       R5_CLR=$(rate_color "$RATE5")
-      LINE2+=" #[fg=${R5_CLR}]5h${RATE5}%"
+      RIGHT+=" #[fg=${R5_CLR}]5h${RATE5}%"
     fi
     if [ "$RATE7" != "0" ]; then
       R7_CLR=$(rate_color "$RATE7")
-      LINE2+=" #[fg=${R7_CLR}]7d${RATE7}%"
+      RIGHT+=" #[fg=${R7_CLR}]7d${RATE7}%"
     fi
     # External quota from onWatch (supplementary)
     if [ -n "$ANTHROPIC_5H_PCT" ]; then
-      LINE2+=" #[fg=#9370db]A:${ANTHROPIC_5H_PCT}%"
+      RIGHT+=" #[fg=#9370db]A:${ANTHROPIC_5H_PCT}%"
     fi
     if [ -n "$OPENAI_5H_PCT" ]; then
-      LINE2+=" #[fg=#9370db]O:${OPENAI_5H_PCT}%"
+      RIGHT+=" #[fg=#9370db]O:${OPENAI_5H_PCT}%"
     fi
   fi
 
   # Budget remaining
   if [ -n "$BUDGET_DISPLAY" ]; then
-    LINE2+=" #[fg=#a6e3a1]${BUDGET_DISPLAY}"
+    RIGHT+=" #[fg=#a6e3a1]${BUDGET_DISPLAY}"
   fi
 
   # OpenAI request remaining
   if [ -n "$OPENAI_REQ_REMAIN" ] && [ "$OPENAI_REQ_REMAIN" != "0" ] && [ "$OPENAI_REQ_REMAIN" != "" ]; then
-    LINE2+=" #[fg=#74c7ec]OAI:${OPENAI_REQ_REMAIN}req"
+    RIGHT+=" #[fg=#74c7ec]OAI:${OPENAI_REQ_REMAIN}req"
   fi
 
-  LINE2+=" #[fg=#cdd6f4,bg=#45475a] ${DUR_FMT}"
-  LINE2+="${PERM_DISPLAY}"
+  RIGHT+=" #[fg=#cdd6f4,bg=#45475a] ${DUR_FMT}"
+  RIGHT+="${PERM_DISPLAY}"
 
-  # Set tmux two-line status bar (status-format[0] = top line, status-format[1] = bottom line)
-  tmux set-option -t "$SESSION_NAME" status-format[0] "$LINE1" 2>/dev/null || true
-  tmux set-option -t "$SESSION_NAME" status-format[1] "$LINE2" 2>/dev/null || true
+  # Set tmux status bar
+  tmux set-option -t "$SESSION_NAME" status-left "$LEFT " 2>/dev/null || true
+  tmux set-option -t "$SESSION_NAME" status-right " ${RIGHT}" 2>/dev/null || true
 }
 
 # --- Launch ---
@@ -296,14 +269,13 @@ tmux new-session -d -s "$SESSION_NAME" -x "$(tput cols)" -y "$(tput lines)" 2>/d
   exec codex "$@"
 }
 
-# Configure tmux status bar appearance (Codex theme — dark forest green)
+# Configure tmux status bar appearance
 tmux set-option -t "$SESSION_NAME" status on
 tmux set-option -t "$SESSION_NAME" status-position bottom
-tmux set-option -t "$SESSION_NAME" status-style "bg=#0d2818,fg=#e0e0e0"
+tmux set-option -t "$SESSION_NAME" status-style "bg=#1e1e2e,fg=#cdd6f4"
+tmux set-option -t "$SESSION_NAME" status-left-length 80
+tmux set-option -t "$SESSION_NAME" status-right-length 120
 tmux set-option -t "$SESSION_NAME" status-interval 3
-# Initialize two-line status bar (updated dynamically by render_status)
-tmux set-option -t "$SESSION_NAME" status-format[0] " HYPERSTATUS v3.0 " 2>/dev/null || true
-tmux set-option -t "$SESSION_NAME" status-format[1] " " 2>/dev/null || true
 
 # Start background status updater
 (
