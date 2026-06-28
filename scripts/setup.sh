@@ -628,7 +628,7 @@ main() {
       fi
       
       # Pi
-      if [ -d "${HOME_DIR}/.pi/extensions/hyperstatus" ]; then
+      if [ -d "${HOME_DIR}/.pi/agent/extensions/hyperstatus" ]; then
         log_success "Pi Agent: HyperStatus extension installed"
       else
         log_info "Pi Agent: Not configured"
