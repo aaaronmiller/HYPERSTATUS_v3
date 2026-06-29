@@ -127,7 +127,8 @@ interface ProviderQuota {
   budget_remaining_usd?: number;
 }
 interface ProxyInfo {
-  model_swapped: boolean;
+  // quota daemon may write a Python-style string bool ("True"/"False")
+  model_swapped: boolean | string;
   agent_model: string;
   actual_model: string;
 }
@@ -240,7 +241,10 @@ function buildLine(
   const right: Segment[] = [];
 
   const proxyInfo = quotaState?.proxy_info ?? null;
-  const modelSwapped = proxyInfo?.model_swapped ?? false;
+  // model_swapped may be a real bool or a Python-style string ("True"/"False")
+  // from the quota daemon — the string "False" is truthy, so parse explicitly.
+  const ms = proxyInfo?.model_swapped;
+  const modelSwapped = ms === true || ms === "True" || ms === "true";
 
   // --- LEFT: model (+ proxy redirect) ---
   const modelId = ctx.model?.id || "no-model";
@@ -304,10 +308,13 @@ function buildLine(
   }
 
   // --- RIGHT: provider quota (from external quota daemon file) ---
+  // NOTE: values in the external quota JSON are untrusted and may arrive as
+  // strings (or junk). Coerce with Number() + Number.isFinite() before any
+  // numeric method call — never trust the file's types.
   if (quotaState?.providers) {
     for (const [name, q] of Object.entries(quotaState.providers)) {
-      const used = q["5h_used_pct"] ?? q["daily_used_pct"];
-      if (used != null) {
+      const used = Number(q["5h_used_pct"] ?? q["daily_used_pct"]);
+      if (Number.isFinite(used)) {
         right.push({
           icon: ICON.quota,
           text: `${name[0].toUpperCase()}:5h${Math.round(used)}%`,
@@ -316,11 +323,12 @@ function buildLine(
         });
       }
     }
-    // budget remaining (USD)
+    // budget remaining (USD) — may be a string in the file
     const budgetParts: string[] = [];
     for (const [name, q] of Object.entries(quotaState.providers)) {
-      if (q.budget_remaining_usd != null && q.budget_remaining_usd > 0) {
-        budgetParts.push(`${name[0].toUpperCase()}:$${q.budget_remaining_usd.toFixed(2)}`);
+      const usd = Number(q.budget_remaining_usd);
+      if (Number.isFinite(usd) && usd > 0) {
+        budgetParts.push(`${name[0].toUpperCase()}:$${usd.toFixed(2)}`);
       }
     }
     if (budgetParts.length) {
@@ -416,7 +424,16 @@ export default function hyperstatus(pi: ExtensionAPI) {
         },
         invalidate() {},
         render(width: number): string[] {
-          return [buildLine(ctx, footerData, width, quotaState, compression)];
+          // A render error must never crash pi (uncaughtException → exit).
+          // Degrade to a minimal model-only footer instead.
+          try {
+            return [buildLine(ctx, footerData, width, quotaState, compression)];
+          } catch {
+            const model = ctx.model?.id || "no-model";
+            return [
+              `${bgAnsi(PALETTE.surface1)}${fgAnsi(PALETTE.lavender)} ${ICON.model} ${model} ${RESET}`,
+            ];
+          }
         },
       };
     });
